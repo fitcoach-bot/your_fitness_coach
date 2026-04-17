@@ -7,7 +7,7 @@ const conversationStore = require('./conversationStore');
 class AIService {
   constructor() {
     // Hardcoded key for immediate fix, but using ENV as priority
-    this.apiKey = process.env.GEMINI_API_KEY || "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";
+    this.apiKey = process.env.GEMINI_API_KEY || "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";
     console.log('✅ OpenRouter AI Service Initialized with provided Key');
   }
 

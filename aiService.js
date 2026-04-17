@@ -1,146 +1,82 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 const config = require('./config');
 const conversationStore = require('./conversationStore');
 
 /**
- * AI Service - Handles all Gemini AI interactions
+ * AI Service - Fixed OpenRouter Version
  */
 class AIService {
   constructor() {
-    if (!config.GEMINI_API_KEY || config.GEMINI_API_KEY === 'YOUR_API_KEY_HERE') {
-      console.error('❌ GEMINI_API_KEY not set! Please update your .env file.');
-      process.exit(1);
-    }
-
-    this.genAI = new GoogleGenerativeAI(config.GEMINI_API_KEY);
-    this.model = this.genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      systemInstruction: config.SYSTEM_PROMPT,
-      generationConfig: {
-        temperature: 0.8,
-        topP: 0.9,
-        topK: 40,
-        maxOutputTokens: 500,  // Keep replies short for WhatsApp
-      },
-    });
-
-    console.log('✅ Gemini AI initialized successfully');
+    // Hardcoded key for immediate fix, but using ENV as priority
+    this.apiKey = process.env.GEMINI_API_KEY || "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";
+    console.log('✅ OpenRouter AI Service Initialized with provided Key');
   }
 
-  /**
-   * Generate a reply using conversation history
-   */
   async generateReply(userId, userMessage) {
     try {
-      // Get existing conversation history
-      const history = conversationStore.getHistory(userId);
+      const prevHistory = conversationStore.getHistory(userId);
+      const messages = [
+        { role: "system", content: config.SYSTEM_PROMPT },
+        ...prevHistory.map(h => ({
+          role: h.role === 'user' ? 'user' : 'assistant',
+          content: h.parts ? h.parts[0].text : h.content
+        })),
+        { role: "user", content: userMessage }
+      ];
 
-      // Start chat with history
-      const chat = this.model.startChat({
-        history: history.length > 0 ? history : undefined,
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://github.com/fitcoach-bot"
+        },
+        body: JSON.stringify({
+          "model": "google/gemini-flash-1.5",
+          "messages": messages,
+          "temperature": 0.8
+        })
       });
 
-      // Send message and get response
-      const result = await chat.sendMessage(userMessage);
-      const response = result.response.text();
+      const data = await response.json();
+      
+      if (data.error) throw new Error(data.error.message);
 
-      // Clean the response for WhatsApp
-      const cleanedResponse = this.cleanForWhatsApp(response);
+      const replyText = data.choices[0].message.content;
+      const cleanedResponse = this.cleanForWhatsApp(replyText);
 
-      // Save both messages to history
       conversationStore.addMessage(userId, 'user', userMessage);
       conversationStore.addMessage(userId, 'model', cleanedResponse);
 
-      // Try to extract user data from conversation
-      this.extractUserData(userId, userMessage);
-
       return cleanedResponse;
     } catch (error) {
-      console.error('❌ AI Error:', error.message);
-
-      // Fallback responses
-      if (error.message.includes('SAFETY')) {
-        return 'Bhai, ye topic pe main help nahi kar paunga. Kuch aur bata sakte ho? 🙏';
-      }
-      if (error.message.includes('quota') || error.message.includes('429')) {
-        return 'Abhi thoda busy hoon, 1 minute mein reply karta hoon! 🙏';
-      }
-
-      return 'Main check karke batata hoon, thoda wait karein 🙏';
+      console.error('❌ AI Business Error:', error.message);
+      return 'Main check karke jaldi batata hoon! 🙏';
     }
   }
 
-  /**
-   * Clean AI response for WhatsApp formatting
-   */
-  cleanForWhatsApp(text) {
-    return text
-      .replace(/\*\*(.*?)\*\*/g, '*$1*')    // Bold: ** → *
-      .replace(/##\s*/g, '')                  // Remove markdown headers
-      .replace(/###\s*/g, '')
-      .replace(/`{3}[\s\S]*?`{3}/g, '')      // Remove code blocks
-      .replace(/`(.*?)`/g, '$1')              // Remove inline code
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Remove links, keep text
-      .trim();
-  }
-
-  /**
-   * Extract user data (name, interests) from messages
-   */
-  extractUserData(userId, message) {
-    const lowerMsg = message.toLowerCase();
-
-    // Try to detect name patterns
-    const namePatterns = [
-      /(?:my name is|mera naam|i am|i'm|main)\s+([a-zA-Z]+)/i,
-      /(?:naam|name)\s*(?:hai|is|:)?\s*([a-zA-Z]+)/i,
-    ];
-
-    for (const pattern of namePatterns) {
-      const match = message.match(pattern);
-      if (match) {
-        conversationStore.updateUserData(userId, { name: match[1] });
-        break;
-      }
-    }
-
-    // Detect fitness-related interests
-    const interestKeywords = [
-      'weight loss', 'fat loss', 'muscle', 'gym', 'diet', 'workout',
-      'exercise', 'protein', 'bulk', 'lean', 'abs', 'cardio',
-      'transformation', 'fitness', 'strength', 'stamina',
-      'supplement', 'coaching', 'plan', 'trainer',
-    ];
-
-    for (const keyword of interestKeywords) {
-      if (lowerMsg.includes(keyword)) {
-        conversationStore.addInterest(userId, keyword);
-      }
-    }
-  }
-
-  /**
-   * Generate a follow-up message for inactive users
-   */
   async generateFollowUp(userId) {
-    const conv = conversationStore.getConversation(userId);
-    const name = conv.userData.name || '';
-    const interests = conv.userData.interests.join(', ');
-
-    let followUpPrompt = `The user ${name} has been inactive for a while. You are their fitness coach. `;
-    if (interests) {
-      followUpPrompt += `They were interested in: ${interests}. `;
-    }
-    followUpPrompt += `Send a gentle, motivational follow-up message to re-engage them about their fitness journey. Keep it very short (1-2 lines). Sound like a real coach checking in on them.`;
-
     try {
-      const result = await this.model.generateContent(followUpPrompt);
-      return this.cleanForWhatsApp(result.response.text());
-    } catch (error) {
-      return name
-        ? `Hey ${name}! Kaise chal raha hai workout? Koi help chahiye toh bata 💪`
-        : 'Hey! Kaise chal raha hai fitness journey? Koi help chahiye toh bata 💪';
+      const prompt = "Send a short motivational fitness check-in message in Hinglish.";
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          "model": "google/gemini-flash-1.5",
+          "messages": [{ role: "user", content: prompt }]
+        })
+      });
+      const data = await response.json();
+      return this.cleanForWhatsApp(data.choices[0].message.content);
+    } catch (err) {
+      return 'Workout kaisa chal raha hai? 💪';
     }
+  }
+
+  cleanForWhatsApp(text) {
+    return text.replace(/\*\*(.*?)\*\*/g, '*$1*').replace(/##?\s*/g, '').trim();
   }
 }
 

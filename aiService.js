@@ -2,13 +2,13 @@ const config = require('./config');
 const conversationStore = require('./conversationStore');
 
 /**
- * AI Service - Fixed OpenRouter Version
+ * AI Service - Professional OpenRouter Integration (Final Fix)
  */
 class AIService {
   constructor() {
-    // Hardcoded key for immediate fix, but using ENV as priority
-    this.apiKey = process.env.GEMINI_API_KEY || "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";
-    console.log('✅ OpenRouter AI Service Initialized with provided Key');
+    // Force using the provided key directly to avoid Railway Variable confusion
+    this.apiKey = "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";
+    console.log('✅ AI Service: Using Direct OpenRouter Key');
   }
 
   async generateReply(userId, userMessage) {
@@ -23,12 +23,13 @@ class AIService {
         { role: "user", content: userMessage }
       ];
 
+      console.log(`🤖 Logic: Calling OpenRouter for user ${userId}...`);
+
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${this.apiKey}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": "https://github.com/fitcoach-bot"
+          "Authorization": `Bearer ${this.apiKey.trim()}`, // Added .trim() for safety
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           "model": "google/gemini-flash-1.5",
@@ -39,7 +40,10 @@ class AIService {
 
       const data = await response.json();
       
-      if (data.error) throw new Error(data.error.message);
+      if (data.error) {
+        console.error('❌ OpenRouter Provider Error:', data.error);
+        throw new Error(data.error.message || "Auth Error");
+      }
 
       const replyText = data.choices[0].message.content;
       const cleanedResponse = this.cleanForWhatsApp(replyText);
@@ -49,29 +53,28 @@ class AIService {
 
       return cleanedResponse;
     } catch (error) {
-      console.error('❌ AI Business Error:', error.message);
-      return 'Main check karke jaldi batata hoon! 🙏';
+      console.error('❌ AI Final Error:', error.message);
+      return 'Main check karke batata hoon, server thoda busy hai! 🙏';
     }
   }
 
   async generateFollowUp(userId) {
     try {
-      const prompt = "Send a short motivational fitness check-in message in Hinglish.";
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${this.apiKey}`,
+          "Authorization": `Bearer ${this.apiKey.trim()}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
           "model": "google/gemini-flash-1.5",
-          "messages": [{ role: "user", content: prompt }]
+          "messages": [{ role: "user", content: "Short Hinglish fitness check-in" }]
         })
       });
       const data = await response.json();
       return this.cleanForWhatsApp(data.choices[0].message.content);
     } catch (err) {
-      return 'Workout kaisa chal raha hai? 💪';
+      return 'Kaise chal raha hai workout? 💪';
     }
   }
 

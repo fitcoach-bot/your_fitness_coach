@@ -1,29 +1,29 @@
-# Use the official Puppeteer Docker image which has Chrome ready
-FROM ghcr.io/puppeteer/puppeteer:latest
+FROM node:18-bullseye-slim
 
-# Switch to root to configure permissions and install packages safely
-USER root
+# Install Chromium browser and fonts to support all messaging languages
+RUN apt-get update && apt-get install -y \
+    chromium \
+    fonts-ipafont-gothic \
+    fonts-wqy-zenhei \
+    fonts-thai-tlwg \
+    fonts-kacst \
+    fonts-freefont-ttf \
+    libxss1 \
+    --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
 
-# Environment variables to skip chromium download and point to the installed chrome
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+# Force Puppeteer to use the installed Chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 WORKDIR /app
 
-# Copy the package files
+# Copy and install Node packages
 COPY package*.json ./
-
-# Install the Node packages
 RUN npm install
 
-# Copy all the remaining files into the container
+# Copy bot code
 COPY . .
 
-# Grant permissions to the internal user provided by the base image
-RUN chown -R pptruser:pptruser /app
-
-# Switch to the non-root user for security
-USER pptruser
-
-# Command to start the bot
+# Run bot
 CMD ["node", "index.js"]

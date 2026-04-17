@@ -3,6 +3,11 @@ FROM ghcr.io/puppeteer/puppeteer:latest
 
 # Switch to root to configure permissions and install packages safely
 USER root
+
+# Environment variables to skip chromium download and point to the installed chrome
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+
 WORKDIR /app
 
 # Copy the package files

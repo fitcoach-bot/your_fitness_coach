@@ -10,10 +10,38 @@ const QRCode = require('qrcode');
 const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
+const http = require('http'); // Native HTTP module for Cloud Render
 const config = require('./config');
 const aiService = require('./aiService');
 const intentHandler = require('./intentHandler');
 const conversationStore = require('./conversationStore');
+
+// ─── HTTP Web Server (For Render Port Binding & QR Viewing) ─────
+let currentAppStatus = 'Initializing...';
+
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/html' });
+  
+  if (currentAppStatus === 'SCAN_QR') {
+    // Serve the saved QR code if it exists
+    const qrPath = path.join(__dirname, 'qr-code.html');
+    if (fs.existsSync(qrPath)) {
+      res.end(fs.readFileSync(qrPath));
+    } else {
+      res.end('<h1>QR Code is generating... refresh in 5 seconds.</h1>');
+    }
+  } else if (currentAppStatus === 'CONNECTED') {
+    res.end('<h1 style="color:green;font-family:sans-serif;text-align:center;margin-top:50px;">FitCoach AI Bot is LIVE & CONNECTED! ✅</h1>');
+  } else {
+    res.end('<h1 style="font-family:sans-serif;text-align:center;margin-top:50px;">' + currentAppStatus + '</h1>');
+  }
+});
+
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, () => {
+  console.log(`\n🌍 Web Server is running on port ${PORT}`);
+  console.log(`👉 You can view the QR code anytime from your Render Web URL!`);
+});
 
 // ─── Puppeteer Setup (Laptop + Mobile Support) ──────────────
 const puppeteerConfig = {
@@ -48,7 +76,8 @@ const client = new Client({
 let qrPageOpened = false;
 
 client.on('qr', async (qr) => {
-  console.log('\n📱 QR Code generated! Opening in browser...\n');
+  currentAppStatus = 'SCAN_QR';
+  console.log('\n📱 QR Code generated! Please view it on your Render URL.\n');
 
   try {
     // Generate QR code as data URL
@@ -141,6 +170,7 @@ client.on('qr', async (qr) => {
 
 // ─── Authentication Events ──────────────────────────────────────
 client.on('authenticated', () => {
+  currentAppStatus = 'CONNECTED';
   console.log('✅ WhatsApp authenticated successfully!');
 });
 

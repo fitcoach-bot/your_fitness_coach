@@ -53,6 +53,9 @@ const puppeteerConfig = {
     '--disable-accelerated-2d-canvas',
     '--no-first-run',
     '--disable-gpu',
+    '--js-flags="--max-old-space-size=250"', // Force low memory limits for Node/JS in chrome
+    '--no-zygote',
+    '--single-process'
   ],
 };
 

@@ -7,8 +7,8 @@ const conversationStore = require('./conversationStore');
 class AIService {
   constructor() {
     // Force using the provided key directly to avoid Railway Variable confusion
-    this.apiKey = "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";
-    console.log('✅ AI Service: Using Direct OpenRouter Key');
+    this.apiKey = "sk-or-v1-6b891b376d89e18372a4114df96c4ea6be3e4582932f7abc21dfc603";
+    console.log('✅ AI Service: Updated to Railway OpenRouter Key');
   }
 
   async generateReply(userId, userMessage) {
